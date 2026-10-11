@@ -15,6 +15,7 @@ from src.challenge import CF_INTERSTITIAL_INDICATORS_SELECTORS
 from src.endpoints import read_item
 from src.models import LinkRequest
 from src.utils import BrowserDepClass, TimeoutTimer, remaining_ms
+from tests.challenge_test import DDG_CHALLENGE_HTML
 
 client = TestClient(app)
 
@@ -150,6 +151,7 @@ def fake_dep(
     widget_box: dict[str, float] | None = None,
     widget_error: Exception | None = None,
     user_agent: str | None = "UnitTestBrowser/1.0",
+    html: str = "<html><title>Login</title></html>",
 ) -> BrowserDepClass:
     """Build a browser dependency pair backed by mocks."""
     page = AsyncMock()
@@ -160,7 +162,7 @@ def fake_dep(
         request=MagicMock(headers={"user-agent": user_agent} if user_agent else {}),
     )
     page.title.return_value = "Login"
-    page.content.return_value = "<html><title>Login</title></html>"
+    page.content.return_value = html
     remaining = list(marker_counts or [])
 
     def count_for(selector: str) -> int:
@@ -350,6 +352,27 @@ async def test_challenge_that_never_clears_returns_408():
         )
 
     assert exc.value.status_code == HTTPStatus.REQUEST_TIMEOUT
+
+
+@pytest.mark.asyncio
+async def test_ddos_guard_challenge_returns_403_without_cloudflare_solver():
+    """A persistent DDoS-Guard interstitial is an error, never a Cloudflare click."""
+    dep = fake_dep(
+        challenged=True,
+        marker_counts=[1],
+        html=DDG_CHALLENGE_HTML,
+        widget_box={"x": 100.0, "y": 200.0, "width": 300.0, "height": 60.0},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await read_item(
+            LinkRequest(url="https://example.test/login", max_timeout=5), dep
+        )
+
+    assert exc.value.status_code == HTTPStatus.FORBIDDEN
+    assert "DDoS-Guard" in str(exc.value.detail)
+    dep.page.mouse.down.assert_not_awaited()
+    dep.page.mouse.move.assert_not_awaited()
 
 
 @pytest.mark.asyncio

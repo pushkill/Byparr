@@ -15,6 +15,8 @@ from src.utils import TimeoutTimer, logger
 __all__ = [
     "CF_INTERSTITIAL_INDICATORS_SELECTORS",
     "challenge_present",
+    "ddos_guard_challenge_in_html",
+    "ddos_guard_challenge_present",
     "solve_challenge",
 ]
 
@@ -30,6 +32,24 @@ WIDGET_ANCESTOR_DEPTHS = (1, 2, 3, 4)
 WIDGET_MIN_WIDTH = 40
 WIDGET_MIN_HEIGHT = 20
 WIDGET_MAX_HEIGHT = 120
+DDG_ORIGIN_MARKERS = ('data-ddg-origin="true"', "data-ddg-origin='true'")
+DDG_SCRIPT_MARKERS = (
+    "/.well-known/ddos-guard/js-challenge/",
+    "check.ddos-guard.net/check.js",
+)
+
+
+def ddos_guard_challenge_in_html(html: str) -> bool:
+    """Report whether HTML is an active DDoS-Guard JavaScript challenge page."""
+    lowered = html.lower()
+    has_origin = any(marker in lowered for marker in DDG_ORIGIN_MARKERS)
+    has_script = any(marker in lowered for marker in DDG_SCRIPT_MARKERS)
+    return has_origin and has_script
+
+
+async def ddos_guard_challenge_present(page: Page) -> bool:
+    """Report whether the page is showing a DDoS-Guard JavaScript challenge."""
+    return ddos_guard_challenge_in_html(await page.content())
 
 
 async def challenge_present(page: Page) -> bool:

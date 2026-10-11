@@ -8,7 +8,11 @@ from fastapi.responses import RedirectResponse
 from invisible_playwright.async_api import Error as PlaywrightError
 from invisible_playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
-from src.challenge import challenge_present, solve_challenge
+from src.challenge import (
+    challenge_present,
+    ddos_guard_challenge_present,
+    solve_challenge,
+)
 from src.content import build_response_content
 from src.models import (
     HealthcheckResponse,
@@ -133,9 +137,19 @@ async def _navigate_and_solve(
         state="domcontentloaded", timeout=remaining_ms(timer)
     )
 
-    if await challenge_present(dep.page):
+    if await ddos_guard_challenge_present(dep.page):
+        logger.info("DDoS-Guard challenge detected; skipping Cloudflare solver")
+    elif await challenge_present(dep.page):
         await solve_challenge(dep.page, timer)
+
     await _wait_for_networkidle(dep, timer)
+
+    if await ddos_guard_challenge_present(dep.page):
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail="DDoS-Guard JavaScript challenge is still present",
+        )
+
     return page_request
 
 
