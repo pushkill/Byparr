@@ -9,7 +9,7 @@ on:
   schedule:
     - cron: "25 0 * * *"
   push:
-    branches: ["main", "ddg-detection"]
+    branches: ["main",  "ddg-detection"]
     # Publish semver tags as releases.
     tags: ["v*.*.*"]
     paths:
